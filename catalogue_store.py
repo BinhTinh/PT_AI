@@ -1,5 +1,3 @@
-
-
 import hashlib
 import json
 import logging
@@ -12,6 +10,27 @@ TESTSPECS_DIR = Path("testspecs")
 SEALS_FILE = TESTSPECS_DIR / ".seals.json"
 
 _EXCLUDED_KEYS = {"_source_file"}
+
+
+class SealConflictError(Exception):
+    """Nem ra khi seal(test_id) duoc goi lai cho mot TestSpec DA tung duoc seal
+    truoc do, nhung noi dung hien tai (content_hash) khac voi hash da seal, va
+    nguoi goi khong truyen force=True. Day la co che chan reseal AM THAM
+    (TOCTOU): mot TestSpec da dong bang khong the bi thay doi ket qua seal chi
+    bang cach goi lai seal() vo tinh, phai chu dich truyen force=True.
+    """
+
+    def __init__(self, test_id: str, sealed_hash: str, current_hash: str, sealed_at: str):
+        self.test_id = test_id
+        self.sealed_hash = sealed_hash
+        self.current_hash = current_hash
+        self.sealed_at = sealed_at
+        super().__init__(
+            f"TestSpec test_id={test_id} da duoc seal luc {sealed_at} voi "
+            f"content_hash={sealed_hash[:12]}..., nhung noi dung hien tai tren dia "
+            f"co content_hash={current_hash[:12]}... (KHAC voi seal cu). "
+            f"Khong ghi de. Goi lai voi force=True neu day la mot RESEAL CO CHU DICH."
+        )
 
 
 def _iter_testspec_files(testspecs_dir: Path = TESTSPECS_DIR):
@@ -81,24 +100,48 @@ def _write_seals(seals: dict, testspecs_dir: Path = TESTSPECS_DIR) -> None:
         json.dump(seals, f, ensure_ascii=False, indent=2)
 
 
-def seal(test_id: str, testspecs_dir: Path = TESTSPECS_DIR) -> dict:
-    """Catalogue tự ghi nhận hash + thời điểm ghi cho TestSpec đã tồn tại trên đĩa.
-    Gọi ngay sau khi create_testspec.py ghi file. Ghi đè seal cũ nếu gọi lại cho cùng test_id.
+def seal(test_id: str, testspecs_dir: Path = TESTSPECS_DIR, force: bool = False) -> dict:
+    """Đóng băng TestSpec: ghi content_hash + sealed_at vào .seals.json.
+
+    - Chưa từng seal (test_id không có trong .seals.json): seal bình thường.
+    - Đã seal trước đó và nội dung KHÔNG đổi (hash trùng): seal lại một cách
+      idempotent (chỉ cập nhật sealed_at), không cần force — gọi lại freeze
+      nhiều lần trên cùng nội dung không phải là lỗi.
+    - Đã seal trước đó và nội dung ĐÃ đổi (hash khác) mà force=False:
+      raise SealConflictError, KHÔNG ghi đè, seal cũ được giữ nguyên.
+    - force=True: ghi đè seal mới bất kể hash cũ có khớp hay không — đây là
+      lối thoát DUY NHẤT để reseal, và phải do người gọi chủ động chọn.
     """
     spec = get(test_id, testspecs_dir)
     if spec is None:
         raise ValueError(f"Không tìm thấy TestSpec test_id={test_id} để seal")
 
+    current_hash = content_hash(spec)
+    seals = _load_seals(testspecs_dir)
+    existing = seals.get(test_id)
+
+    if existing is not None and not force and existing.get("content_hash") != current_hash:
+        raise SealConflictError(
+            test_id=test_id,
+            sealed_hash=existing.get("content_hash"),
+            current_hash=current_hash,
+            sealed_at=existing.get("sealed_at"),
+        )
+
     record = {
         "test_id": test_id,
-        "content_hash": content_hash(spec),
+        "content_hash": current_hash,
         "sealed_at": datetime.now(timezone.utc).isoformat(),
     }
-
-    seals = _load_seals(testspecs_dir)
     seals[test_id] = record
     _write_seals(seals, testspecs_dir)
     return record
+
+
+def is_sealed(test_id: str, testspecs_dir: Path = TESTSPECS_DIR) -> bool:
+    """True nếu test_id đã có seal record — dùng để quyết định một TestSpec
+    còn ở trạng thái DRAFT (có thể sửa tự do) hay đã bị đóng băng."""
+    return get_seal(test_id, testspecs_dir) is not None
 
 
 def get_seal(test_id: str, testspecs_dir: Path = TESTSPECS_DIR) -> dict | None:

@@ -1,8 +1,3 @@
-"""
-taxonomy_validator.py — Tang Taxonomy cua Validator.
-Chi doc registry tinh (taxonomy_registry, attack_type_framework, capability_vocabulary).
-Khong I/O ngoai, khong side-effect. Gia dinh Structural da pass truoc khi goi.
-"""
 
 from typing import Optional
 
@@ -72,6 +67,15 @@ def validate(testspec: dict) -> dict:
             f"evidence khong khop attack_type='{definition.attack_type}'. "
             f"Thieu: {sorted(missing)}, Du: {sorted(extra)}.",
         )
+
+    for namespace_name, namespace in (("mechanism", mechanism), ("evidence", evidence)):
+        for key, value in namespace.items():
+            if not isinstance(value, str) or not value.strip():
+                return _result(
+                    test_id, False, "TAXO_EMPTY_FIELD_VALUE",
+                    f"Field '{namespace_name}.{key}' phai la str non-empty "
+                    f"(attack_type='{definition.attack_type}').",
+                )
 
     prerequisites = testspec.get("prerequisites", [])
     for tag in prerequisites:
