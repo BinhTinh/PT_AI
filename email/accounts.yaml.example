@@ -1,0 +1,9 @@
+accounts:
+  - name: bikumnotme
+    email: example@gmail.com
+    app_password: "x"
+
+  - name: phuong
+    email: example@gmail.com
+    app_password: "x"
+
