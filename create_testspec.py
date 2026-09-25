@@ -7,7 +7,7 @@ import capability_vocabulary as vocab
 import catalogue_store as store
 
 TAXONOMY_VERSION = "2026"
-OUTPUT_DIR = Path("testspecs")
+OUTPUT_DIR = store.TESTSPECS_DIR
 
 
 def ask(prompt: str, allow_empty: bool = False) -> str:
@@ -151,10 +151,10 @@ def save_testspec(testspec: dict) -> Path:
 
 def main() -> None:
     print("=== Tao TestSpec moi (ho tro day du ASI01-ASI10) ===")
+    print("TestSpec duoc tao o trang thai DRAFT, chua bi dong bang.")
+    print("Dung freeze_testspec.py khi san sang chot TestSpec nay cho mot lan chay that.\n")
     testspec = build_testspec()
     save_testspec(testspec)
-    seal_record = store.seal(testspec["test_id"])
-    print(f"Da seal TestSpec: {seal_record}")
 
 
 if __name__ == "__main__":

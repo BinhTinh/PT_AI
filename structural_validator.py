@@ -97,6 +97,18 @@ def validate(testspec: dict) -> dict:
                 test_id, False, "STRUCT_MISSING_FIELD",
                 f"Thieu namespace mo rong bat buoc '{field}' (phai la dict).",
             )
+        namespace = testspec[field]
+        if not namespace:
+            return _result(
+                test_id, False, "STRUCT_EMPTY_NAMESPACE",
+                f"Namespace '{field}' khong duoc rong.",
+            )
+        for key, value in namespace.items():
+            if not isinstance(value, str) or not value.strip():
+                return _result(
+                    test_id, False, "STRUCT_EMPTY_FIELD_VALUE",
+                    f"Field '{field}.{key}' phai la str non-empty.",
+                )
 
     allowed_fields = set(REQUIRED_BASE_FIELDS) | ALLOWED_EXTRA_FIELDS
     unknown_fields = set(testspec.keys()) - allowed_fields

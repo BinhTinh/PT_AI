@@ -1,5 +1,3 @@
-
-
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -44,9 +42,25 @@ def validate(testspec: dict, scope: ScopeConfig, now: Optional[datetime] = None)
             scope.campaign_id,
         )
 
+    try:
+        start = datetime.fromisoformat(scope.testing_window.start)
+        end = datetime.fromisoformat(scope.testing_window.end)
+    except (ValueError, TypeError):
+        return _result(
+            test_id, False, "SCOPE_INVALID_DATETIME",
+            f"testing_window co gia tri khong phai ISO8601 hop le: "
+            f"start='{scope.testing_window.start}', end='{scope.testing_window.end}'.",
+            scope.campaign_id,
+        )
+
+    if start.tzinfo is None or end.tzinfo is None:
+        return _result(
+            test_id, False, "SCOPE_NAIVE_DATETIME",
+            "testing_window.start/end thieu timezone offset.",
+            scope.campaign_id,
+        )
+
     current_time = now or datetime.now(timezone.utc)
-    start = datetime.fromisoformat(scope.testing_window.start)
-    end = datetime.fromisoformat(scope.testing_window.end)
     if not (start <= current_time <= end):
         return _result(
             test_id, False, "SCOPE_OUTSIDE_TESTING_WINDOW",
